@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智慧王是非題搶答挑戰</title>
+  <!-- 載入 TensorFlow.js 與 Teachable Machine Image 函式庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      text-align: center;
+      background-color: #f1f5f9;
+      margin: 0;
+      padding: 20px 16px;
+      transition: background-color 0.4s ease;
+      color: #1e293b;
+    }
+
+    .container {
+      background: #ffffff;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      border: 2px solid #e2e8f0;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.6rem;
+      color: #1d4ed8;
+    }
+
+    .dashboard {
+      display: flex;
+      justify-content: space-between;
+      background: #eff6ff;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 16px;
+    }
+
+    .question-panel {
+      background: #f8fafc;
+      border: 2px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 18px;
+      min-height: 90px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .question-text {
+      font-size: 1.2rem;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .timer-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin: 10px 0;
+    }
+
+    .timer-badge {
+      font-size: 1.1rem;
+      font-weight: 800;
+      background: #ef4444;
+      color: white;
+      padding: 4px 14px;
+      border-radius: 20px;
+    }
+
+    .hold-bar-container {
+      width: 140px;
+      height: 12px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .hold-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: #10b981;
+      transition: width 0.1s linear;
+    }
+
+    #webcam-container {
+      margin: 10px auto;
+      display: inline-block;
+      border: 4px solid #cbd5e1;
+      border-radius: 14px;
+      overflow: hidden;
+      line-height: 0;
+      background: #000;
+    }
+
+    #webcam-container canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    #result-banner {
+      font-size: 1.25rem;
+      font-weight: 800;
+      min-height: 42px;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bar-row {
+      margin: 6px auto;
+      max-width: 320px;
+      text-align: left;
+    }
+
+    .bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    progress {
+      width: 100%;
+      height: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+      appearance: none;
+    }
+    progress::-webkit-progress-bar { background-color: #e2e8f0; border-radius: 6px; }
+    progress::-webkit-progress-value { background-color: #3b82f6; border-radius: 6px; }
+
+    .btn {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🧠 智慧王是非題搶答挑戰</h1>
+
+    <div class="dashboard">
+      <span>得分：<span id="score-text">0</span></span>
+      <span>題號：<span id="round-text">準備中</span> / 5</span>
+    </div>
+
+    <div class="question-panel">
+      <div id="question-content" class="question-text">請點擊下方按鈕啟動攝影機並開始測驗！</div>
+      
+      <div class="timer-container" id="timer-group" style="display: none;">
+        <div class="timer-badge">⏳ 倒數：<span id="seconds">8</span> 秒</div>
+        <div class="hold-bar-container" id="hold-box">
+          <div class="hold-bar-fill" id="hold-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <button id="start-btn" class="btn" onclick="initGame()">啟動攝影機並開始</button>
+
+    <div>
+      <div id="webcam-container"></div>
+    </div>
+
+    <div id="result-banner">準備中...（比讚👍代表是 O、比倒讚👎代表否 X）</div>
+    <div id="label-container"></div>
+  </div>
+
+  <script>
+    // 你的 Teachable Machine 模型網址
+    const URL = "https://teachablemachine.withgoogle.com/models/n8xikSd3CM/";
+
+    // 題庫設計
+    const questions = [
+      { q: "1. 企鵝完全生活在南半球，北極沒有野生企鵝？", ans: "yes", exp: "（正確！野生企鵝主要生活在南極及南半球島嶼。）" },
+      { q: "2. 西瓜在植物學分類上屬於「水果」，不是瓜果類蔬菜？", ans: "no", exp: "（錯誤！西瓜在園藝分類上屬於一年生瓜果類蔬菜。）" },
+      { q: "3. 人的大腦在睡覺時，腦神經電位活躍度可能高於看電視？", ans: "yes", exp: "（正確！大腦在快速動眼期進行記憶整理與修復，非常活躍。）" },
+      { q: "4. 閃電是絕對不可能打在同一個地點兩次的？", ans: "no", exp: "（錯誤！高聳建築如台北 101 每年都會被雷擊中多次。）" },
+      { q: "5. 貓咪發出呼嚕聲，代表牠此時百分之百處於開心放鬆狀態？", ans: "no", exp: "（錯誤！貓在疼痛、受傷或恐懼自我療癒時也會呼嚕。）" }
+    ];
+
+    let model, webcam, labelContainer, maxPredictions;
+    let score = 0;
+    let currentIndex = 0;
+    let timerId = null;
+    let timeLeft = 8;
+
+    // 狀態機設計
+    // 'IDLE' | 'COUNTDOWN' | 'LOCKED' | 'JUDGING'
+    let state = "IDLE";
+    let isPredicting = false;
+
+    // 防抖與蓄力機制
+    let currentPose = "default";
+    let holdCount = 0;
+    const REQUIRED_HOLD = 15; // 約 1.5 秒穩定判定 (15 幀 * 100ms)
+
+    // Web Audio 音效產生器
+    function playBeep(freq, duration = 0.2) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    async function initGame() {
+      const btn = document.getElementById("start-btn");
+      const qBox = document.getElementById("question-content");
+      btn.disabled = true;
+      qBox.innerText = "載入 AI 模型與視訊設備中，請稍候...";
+
+      try {
+        model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+        maxPredictions = model.getTotalClasses();
+
+        // 啟動視訊鏡頭（水平翻轉鏡像）
+        webcam = new tmImage.Webcam(320, 240, true);
+        await webcam.setup();
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          const div = document.createElement("div");
+          div.className = "bar-row";
+          labelContainer.appendChild(div);
+        }
+
+        score = 0;
+        currentIndex = 0;
+        document.getElementById("score-text").innerText = score;
+        startRound();
+      } catch (err) {
+        alert("模型載入失敗，請確認已授權視訊攝影機！");
+        btn.disabled = false;
+        qBox.innerText = "載入失敗，請重新整理頁面。";
+      }
+    }
+
+    async function loop() {
+      webcam.update();
+      if (!isPredicting) {
+        isPredicting = true;
+        await predict();
+        isPredicting = false;
+      }
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      let highestProb = 0;
+      let topClass = "";
+
+      for (let i = 0; i < maxPredictions; i++) {
+        const name = prediction[i].className;
+        const prob = prediction[i].probability;
+        labelContainer.childNodes[i].innerHTML = `
+          <div class="bar-label"><span>${name}</span><span>${(prob * 100).toFixed(0)}%</span></div>
+          <progress value="${prob}" max="1"></progress>
+        `;
+
+        if (prob > highestProb) {
+          highestProb = prob;
+          topClass = name.trim().toLowerCase();
+        }
+      }
+
+      // 只有在倒數階段才收集玩家姿勢
+      if (state === "COUNTDOWN") {
+        processPoseStabilization(topClass, highestProb);
+      }
+    }
+
+    // 姿勢防抖與蓄力鎖定
+    function processPoseStabilization(topClass, prob) {
+      const banner = document.getElementById("result-banner");
+      const holdBox = document.getElementById("hold-box");
+      const holdFill = document.getElementById("hold-fill");
+
+      if (prob > 0.8 && (topClass === "yes" || topClass === "no")) {
+        if (topClass === currentPose) {
+          holdCount++;
+        } else {
+          currentPose = topClass;
+          holdCount = 1;
+        }
+
+        holdBox.style.display = "block";
+        const pct = Math.min(100, (holdCount / REQUIRED_HOLD) * 100);
+        holdFill.style.width = pct + "%";
+
+        const textTag = currentPose === "yes" ? "【 是 (O) 👍 】" : "【 否 (X) 👎 】";
+        banner.innerHTML = `偵測中：${textTag}（維持鎖定中...）`;
+
+        // 蓄力完成 -> 提前鎖定答案結算！
+        if (holdCount >= REQUIRED_HOLD) {
+          state = "LOCKED";
+          clearInterval(timerId);
+          judgeRound(currentPose);
+        }
+      } else {
+        // default 狀態或信心不足
+        currentPose = "default";
+        holdCount = 0;
+        holdBox.style.display = "none";
+        holdFill.style.width = "0%";
+        banner.innerHTML = "請表態：比讚代表 O，倒讚代表 X";
+        document.body.style.backgroundColor = "#f1f5f9";
+      }
+    }
+
+    function startRound() {
+      if (currentIndex >= questions.length) {
+        showFinalResult();
+        return;
+      }
+
+      state = "COUNTDOWN";
+      currentPose = "default";
+      holdCount = 0;
+      timeLeft = 8; // 完整 8 秒倒數
+
+      const q = questions[currentIndex];
+      document.getElementById("round-text").innerText = currentIndex + 1;
+      document.getElementById("question-content").innerText = q.q;
+      
+      const timerGroup = document.getElementById("timer-group");
+      timerGroup.style.display = "flex";
+      document.getElementById("seconds").innerText = timeLeft;
+      document.getElementById("hold-box").style.display = "none";
+      document.getElementById("hold-fill").style.width = "0%";
+
+      document.getElementById("result-banner").innerText = "請在 8 秒內做出動作並維持 1.5 秒！";
+      document.body.style.backgroundColor = "#f1f5f9";
+
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        timeLeft--;
+        document.getElementById("seconds").innerText = timeLeft;
+
+        if (timeLeft <= 0) {
+          clearInterval(timerId);
+          state = "LOCKED";
+          // 8 秒時間到，直接以當前姿勢做最終結算
+          judgeRound(currentPose);
+        }
+      }, 1000);
+    }
+
+    function judgeRound(finalAnswer) {
+      state = "JUDGING";
+      const q = questions[currentIndex];
+      const banner = document.getElementById("result-banner");
+      const holdBox = document.getElementById("hold-box");
+      holdBox.style.display = "none";
+
+      if (finalAnswer === q.ans) {
+        score += 100;
+        playBeep(700, 0.35); // 高音答對
+        document.body.style.backgroundColor = "#86efac"; // 綠色
+        banner.innerHTML = `✅ <b>答對了！+100 分！</b> ${q.exp}`;
+      } else {
+        score = Math.max(0, score - 50);
+        playBeep(240, 0.4); // 低音答錯
+        document.body.style.backgroundColor = "#fca5a5"; // 紅色
+        let reason = (finalAnswer === "default") ? "未能在時限內明確表態" : "選錯答案";
+        banner.innerHTML = `❌ <b>${reason}！-50 分！</b> 正確答案為【${q.ans === "yes" ? "O" : "X"}】`;
+      }
+
+      document.getElementById("score-text").innerText = score;
+
+      // 停留 3 秒讓玩家觀看解析，隨後進入下一題
+      setTimeout(() => {
+        currentIndex++;
+        startRound();
+      }, 3000);
+    }
+
+    function showFinalResult() {
+      state = "IDLE";
+      clearInterval(timerId);
+      document.getElementById("timer-group").style.display = "none";
+      document.getElementById("round-text").innerText = "挑戰完成";
+
+      let title = "常識新手 🐥";
+      if (score >= 400) title = "百萬生活智慧王 👑";
+      else if (score >= 200) title = "常識達人 🎓";
+
+      document.getElementById("question-content").innerText = `🎉 恭喜完成全部題目！最終得分：${score} 分\n獲得評價：【${title}】`;
+      document.getElementById("result-banner").innerText = "感謝遊玩！如欲重新挑戰請刷新頁面。";
+      document.body.style.backgroundColor = "#f1f5f9";
+      playBeep(523.25, 0.5);
+    }
+  </script>
+</body>
+</html>
